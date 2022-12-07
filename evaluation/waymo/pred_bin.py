@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', type=str, default='immortal')
+parser.add_argument('--det_name', type=str, default='cp')
 parser.add_argument('--obj_types', type=str, default='vehicle')#,pedestrian')#,cyclist')
 parser.add_argument('--result_folder', type=str, default='./mot_results/waymo/')
 parser.add_argument('--raw_data_folder', type=str, default='./data/waymo/')
@@ -177,7 +178,7 @@ if __name__ == '__main__':
         args.result_folder=os.path.join(args.result_folder, 'validation')
         args.raw_data_folder=os.path.join(args.raw_data_folder, 'validation')
 
-    result_folder = os.path.join(args.result_folder, args.name)
+    result_folder = os.path.join(args.result_folder, args.name + f'_{args.det_name}')
     output_folder = os.path.join(result_folder, 'bin')
     
     if not os.path.exists(output_folder):
