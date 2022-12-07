@@ -138,7 +138,7 @@ if __name__ == '__main__':
         args.det_data_folder = os.path.join(args.det_data_folder, 'validation', 'detection')
         args.result_folder = os.path.join(args.result_folder, 'validation')
 
-    result_folder = os.path.join(args.result_folder, args.name)
+    result_folder = os.path.join(args.result_folder, args.name + f'_{args.det_name}')
     if not os.path.exists(result_folder):
         os.makedirs(result_folder)
         
