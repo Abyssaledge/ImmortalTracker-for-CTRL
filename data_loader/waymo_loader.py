@@ -7,6 +7,9 @@ import os, numpy as np, json
 import mot_3d.utils as utils
 from mot_3d.data_protos import BBox
 from mot_3d.preprocessing import nms
+timer = utils.Timer(10)
+from ipdb import set_trace
+import time
 
 
 class WaymoLoader:
@@ -27,13 +30,21 @@ class WaymoLoader:
         self.ts_info = json.load(open(os.path.join(data_folder, 'ts_info', '{:}.json'.format(segment_name)), 'r'))
         self.ego_info = np.load(os.path.join(data_folder, 'ego_info', '{:}.npz'.format(segment_name)), 
             allow_pickle=True)
-        self.dets = np.load(os.path.join(det_data_folder, 'dets', '{:}.npz'.format(segment_name)),
-        #'vehicle_dets'
-            allow_pickle=True)
+        self.dets = np.load(os.path.join(det_data_folder, 'dets', '{:}.npz'.format(segment_name)), allow_pickle=True)
         self.det_type_filter = True
 
         self.max_frame = len(self.dets['bboxes'])
         self.cur_frame = start_frame
+
+        self.dets_bboxes = [self.dets['bboxes'][i] for i in range(self.max_frame)]
+        self.dets_types = [self.dets['types'][i] for i in range(self.max_frame)]
+        self.ego_info = [self.ego_info[str(i)] for i in range(self.max_frame)]
+        if configs['data_loader'].get('backward', True):
+            assert 'velos' not in self.dets.keys()
+            self.dets_bboxes.reverse()
+            self.dets_types.reverse()
+            self.ego_info.reverse()
+            self.ts_info.reverse()
     
     def __iter__(self):
         return self
@@ -44,10 +55,16 @@ class WaymoLoader:
 
         result = dict()
         result['time_stamp'] = self.ts_info[self.cur_frame] * 1e-6
-        result['ego'] = self.ego_info[str(self.cur_frame)]
+        if isinstance(self.ego_info, list):
+            result['ego'] = self.ego_info[self.cur_frame]
+        else:
+            result['ego'] = self.ego_info[str(self.cur_frame)]
 
-        bboxes = self.dets['bboxes'][self.cur_frame]
-        inst_types = self.dets['types'][self.cur_frame]
+        # bboxes = self.dets['bboxes'][self.cur_frame]
+        # inst_types = self.dets['types'][self.cur_frame]
+        bboxes = self.dets_bboxes[self.cur_frame]
+        inst_types = self.dets_types[self.cur_frame]
+
         selected_dets = [bboxes[i] for i in range(len(bboxes)) if inst_types[i] in self.type_token]
         result['det_types'] = [inst_types[i] for i in range(len(bboxes)) if inst_types[i] in self.type_token]
         result['dets'] = [BBox.bbox2world(result['ego'], BBox.array2bbox(b))

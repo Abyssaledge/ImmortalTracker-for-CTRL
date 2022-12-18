@@ -1,9 +1,15 @@
-import os, numpy as np, argparse, json, sys, numba, yaml, multiprocessing, shutil
+import os, numpy as np, argparse, json, sys, numba, yaml, shutil
+import multiprocessing
+# import torch.multiprocessing as multiprocessing
 import mot_3d.visualization as visualization, mot_3d.utils as utils
 from mot_3d.data_protos import BBox, Validity
 from mot_3d.mot import MOTModel
 from mot_3d.frame_data import FrameData
 from data_loader import WaymoLoader
+from ipdb import set_trace
+from mot_3d.utils import Timer
+import time
+timer = Timer(10)
 
 
 parser = argparse.ArgumentParser()
@@ -85,11 +91,11 @@ def sequence_mot(configs, data_loader: WaymoLoader, sequence_id, gt_bboxes=None,
             det_types=frame_data['det_types'], aux_info=frame_data['aux_info'], time_stamp=frame_data['time_stamp'])
 
         # mot
-        results = tracker.frame_mot(frame_data)
-        result_pred_bboxes = [trk[0] for trk in results]
-        result_pred_ids = [trk[1] for trk in results]
-        result_pred_states = [trk[2] for trk in results]
-        result_types = [trk[3] for trk in results]
+        tracklet_list = tracker.frame_mot(frame_data)
+        result_pred_bboxes = [trk['bboxes'] for trk in tracklet_list]
+        result_pred_ids = [trk['id'] for trk in tracklet_list]
+        result_pred_states = [trk['state'] for trk in tracklet_list]
+        result_types = [trk['type'] for trk in tracklet_list]
         
         # wrap for output
         IDs.append(result_pred_ids)
@@ -100,7 +106,7 @@ def sequence_mot(configs, data_loader: WaymoLoader, sequence_id, gt_bboxes=None,
     return IDs, bboxes, states, types
 
 
-def main(name, obj_type, config_path, data_folder, det_data_folder, result_folder,  start_frame=0, token=0, process=1):
+def main(name, obj_type, config_path, data_folder, det_data_folder, result_folder,  counter_list, start_frame=0, token=0, process=1):
     summary_folder = os.path.join(result_folder, 'summary', obj_type)
     # simply knowing about all the segments
     file_names = sorted(os.listdir(os.path.join(data_folder, 'ego_info')))
@@ -109,6 +115,10 @@ def main(name, obj_type, config_path, data_folder, det_data_folder, result_folde
     
     # load model configs
     configs = yaml.load(open(config_path, 'r'))
+    gpu = configs['running'].get('gpu', False)
+    if gpu:
+        import torch
+        torch.cuda.set_device(token % 8)
     
     if obj_type == 'vehicle':
         type_token = 1
@@ -116,14 +126,25 @@ def main(name, obj_type, config_path, data_folder, det_data_folder, result_folde
         type_token = 2
     elif obj_type == 'cyclist':
         type_token = 4
+    
     for file_index, file_name in enumerate(file_names[:]):
         if file_index % process != token:
             continue
-        print('START TYPE {:} SEQ {:} / {:}'.format(obj_type, file_index + 1, len(file_names)))
         segment_name = file_name.split('.')[0]
         data_loader = WaymoLoader(configs, [type_token], segment_name, data_folder, det_data_folder, start_frame)
 
-        ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
+        try:
+            ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
+            if configs['data_loader'].get('backward', False):
+                ids.reverse()
+                bboxes.reverse()
+                states.reverse()
+        except Exception as e:
+            print(e)
+
+        counter_list.append(file_index)
+        print('FINISH TYPE {:} SEQ {:} / {:}'.format(obj_type, len(counter_list), len(file_names)))
+            
         np.savez_compressed(os.path.join(summary_folder, '{}.npz'.format(segment_name)),
             ids=ids, bboxes=bboxes, states=states)
 
@@ -149,15 +170,20 @@ if __name__ == '__main__':
     if not os.path.exists(summary_folder):
         os.makedirs(summary_folder)
     det_data_folder = os.path.join(args.det_data_folder, args.det_name)
+    manager = multiprocessing.Manager()
+    counter_list = manager.list()
+    beg = time.time()
 
     if args.process > 1:
         pool = multiprocessing.Pool(args.process)
         for token in range(args.process):
             result = pool.apply_async(main, args=(args.name, args.obj_type, args.config_path, args.data_folder, det_data_folder, 
-                result_folder,  0, token, args.process))
+                result_folder, counter_list, 0, token, args.process))
         pool.close()
         pool.join()
     else:
-        main(args.name, args.obj_type, args.config_path, args.data_folder, det_data_folder, result_folder, 
+        main(args.name, args.obj_type, args.config_path, args.data_folder, det_data_folder, result_folder, counter_list,
              args.start_frame, 0, 1)
+    end = time.time()
+    print(f'Tracking time cost: {end - beg}s')
     

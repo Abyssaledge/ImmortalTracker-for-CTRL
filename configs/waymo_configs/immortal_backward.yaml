@@ -19,4 +19,4 @@ running:
 data_loader:
   nms: True
   nms_thres: 0.25
-  backward: False
+  backward: True

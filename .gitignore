@@ -137,3 +137,4 @@ detection_data*
 mot_results*
 compute_tracking_metrics*
 *.bin
+figs

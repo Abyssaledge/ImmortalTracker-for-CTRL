@@ -2,6 +2,7 @@
 """
 import numpy as np
 from copy import deepcopy
+from ipdb import set_trace
 
 
 class BBox:
@@ -24,6 +25,26 @@ class BBox:
         return {
             'center_x': bbox.x, 'center_y': bbox.y, 'center_z': bbox.z,
             'height': bbox.h, 'width': bbox.w, 'length': bbox.l, 'heading': bbox.o}
+
+    @classmethod
+    def merge_boxes(cls, box_list):
+        if len(box_list) == 0:
+            boxes = np.zeros((0, 7), dtype=np.float32)
+        else:
+            boxes = np.stack([b.bbox2mmarray() for b in box_list], 0)
+        assert boxes.shape[1] == 7
+
+        heading = -boxes[:, 6] - 0.5 * np.pi
+        
+        while (heading < -np.pi).any():
+            heading[heading < -np.pi] += 2 * np.pi
+
+        while (heading > np.pi).any():
+            heading[heading > np.pi] -= 2 * np.pi
+
+        boxes[:, 6] = heading
+
+        return boxes
     
     @classmethod
     def bbox2array(cls, bbox):
@@ -31,6 +52,9 @@ class BBox:
             return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h])
         else:
             return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h, bbox.s])
+    
+    def bbox2mmarray(self):
+        return np.array([self.x, self.y, self.z, self.w, self.l, self.h, self.o])
 
     @classmethod
     def array2bbox(cls, data):

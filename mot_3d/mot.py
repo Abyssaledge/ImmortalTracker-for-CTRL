@@ -5,6 +5,9 @@ from .update_info_data import UpdateInfoData
 from .data_protos import BBox, Validity
 from .association import associate_dets_to_tracks
 from . import visualization
+from ipdb import set_trace
+from mot_3d.utils import Timer
+timer = Timer(10)
 
 
 class MOTModel:
@@ -22,6 +25,7 @@ class MOTModel:
 
         self.max_age = configs['running']['max_age_since_update']
         self.min_hits = configs['running']['min_hits_to_birth']
+        self.gpu = configs['running'].get('gpu', False)
     
     
     def frame_mot(self, input_data: FrameData):
@@ -77,7 +81,9 @@ class MOTModel:
         result = list()
         for trk in self.trackers:
             state_string = trk.state_string(self.frame_count)
-            result.append((trk.get_state(), trk.id, state_string, trk.det_type))
+            single_result = {'bboxes':trk.get_state(), 'id':trk.id, 'state':state_string, 'type':trk.det_type}
+            # result.append((trk.get_state(), trk.id, state_string, trk.det_type))
+            result.append(single_result)
         
         # wrap up and update the information about the mot trackers
         self.time_stamp = input_data.time_stamp
@@ -102,7 +108,11 @@ class MOTModel:
             trk_innovation_matrix = [trk.compute_innovation_matrix() for trk in self.trackers] 
 
         matched, unmatched_dets, unmatched_trks = associate_dets_to_tracks(dets, trk_preds, 
-            self.match_type, self.asso, self.asso_thres, trk_innovation_matrix)
+            self.match_type, self.asso, self.asso_thres, trk_innovation_matrix, self.gpu)
+        
+        # matched: [(det_id, track_id), ...]
+        # unmatched_dets: [det_id, ...]
+        # unmatched_trks: [track_id, ...]
         
         for k in range(len(matched)):
             matched[k][0] = det_indexes[matched[k][0]]

@@ -124,7 +124,7 @@ class KalmanFilterMotionModel:
         """
         Advances the state vector and returns the predicted bounding box estimate.
         """
-        time_lag = time_stamp - self.prev_time_stamp
+        time_lag = abs(time_stamp - self.prev_time_stamp) # Fan: I guess abs is needed for backward tracking
         self.latest_time_stamp = time_stamp
         self.kf.F = np.array([[1,0,0,0,0,0,0,time_lag,0,0],      # state transition matrix
                               [0,1,0,0,0,0,0,0,time_lag,0],

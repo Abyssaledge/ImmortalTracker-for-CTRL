@@ -4,18 +4,21 @@ from scipy.optimize import linear_sum_assignment
 from .frame_data import FrameData
 from .update_info_data import UpdateInfoData
 from .data_protos import BBox, Validity
+from mot_3d.utils import Timer
+timer = Timer(10)
+from ipdb import set_trace
 
 
 def associate_dets_to_tracks(dets, tracks, mode, asso, 
-    dist_threshold=0.9, trk_innovation_matrix=None):
+    dist_threshold=0.9, trk_innovation_matrix=None, gpu=False):
     """ associate the tracks with detections
     """
     if mode == 'bipartite':
         matched_indices, dist_matrix = \
-            bipartite_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix)
+            bipartite_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix, gpu)
     elif mode == 'greedy':
         matched_indices, dist_matrix = \
-            greedy_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix)
+            greedy_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix, gpu)
     unmatched_dets = list()
     for d, det in enumerate(dets):
         if d not in matched_indices[:, 0]:
@@ -36,11 +39,11 @@ def associate_dets_to_tracks(dets, tracks, mode, asso,
     return matches, np.array(unmatched_dets), np.array(unmatched_tracks)
 
 
-def bipartite_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix):
+def bipartite_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix, gpu):
     if asso == 'iou':
-        dist_matrix = compute_iou_distance(dets, tracks, asso)
+        dist_matrix = compute_iou_distance(dets, tracks, asso, gpu)
     elif asso == 'giou':
-        dist_matrix = compute_iou_distance(dets, tracks, asso)
+        dist_matrix = compute_iou_distance(dets, tracks, asso, gpu)
     elif asso == 'm_dis':
         dist_matrix = compute_m_distance(dets, tracks, trk_innovation_matrix)
     elif asso == 'euler':
@@ -50,7 +53,7 @@ def bipartite_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix)
     return matched_indices, dist_matrix
 
 
-def greedy_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix):
+def greedy_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix, gpu):
     """ it's ok to use iou in bipartite
         but greedy is only for m_distance
     """
@@ -62,9 +65,9 @@ def greedy_matcher(dets, tracks, asso, dist_threshold, trk_innovation_matrix):
     elif asso == 'euler':
         distance_matrix = compute_m_distance(dets, tracks, None)
     elif asso == 'iou':
-        distance_matrix = compute_iou_distance(dets, tracks, asso)
+        distance_matrix = compute_iou_distance(dets, tracks, asso, gpu)
     elif asso == 'giou':
-        distance_matrix = compute_iou_distance(dets, tracks, asso)
+        distance_matrix = compute_iou_distance(dets, tracks, asso, gpu)
     num_dets, num_trks = distance_matrix.shape
 
     # association in the greedy manner
@@ -107,13 +110,36 @@ def compute_m_distance(dets, tracks, trk_innovation_matrix):
     return dist_matrix
 
 
-def compute_iou_distance(dets, tracks, asso='iou'):
+def compute_iou_distance(dets, tracks, asso='iou', gpu=False):
+    if gpu:
+        gpu_results = compute_iou_distance_gpu(dets, tracks, asso)
+        return gpu_results
     iou_matrix = np.zeros((len(dets), len(tracks)))
     for d, det in enumerate(dets):
         for t, trk in enumerate(tracks):
             if asso == 'iou':
-                iou_matrix[d, t] = utils.iou3d(det, trk)[1]
+                iou_matrix[d, t] = utils.iou3d(det, trk)[1] # 0 is bev iou
             elif asso == 'giou':
                 iou_matrix[d, t] = utils.giou3d(det, trk)
     dist_matrix = 1 - iou_matrix
+    # if len(tracks) > 0:
+    #     error = np.abs((gpu_results - dist_matrix)).max()
+    #     if error > 0.5:
+    #         m_dets = BBox.merge_boxes(dets)
+    #         m_tracks = BBox.merge_boxes(tracks)
+    #         set_trace()
+    return dist_matrix
+
+def compute_iou_distance_gpu(dets, tracks, asso):
+    from mot_3d.utils.cuda_ops import calculate_iou_3d_gpu, calculate_iou_bev_gpu
+    assert asso == 'iou', 'Do not support GIoU for now'
+    if len(dets) == 0 or len(tracks) == 0:
+        return np.zeros((len(dets), len(tracks)))
+    dets = BBox.merge_boxes(dets)
+    tracks = BBox.merge_boxes(tracks)
+    iou_matrix = calculate_iou_3d_gpu(dets, tracks, mode='iou')
+    # iou_matrix = calculate_iou_bev_gpu(dets, tracks, mode='iou')
+    dist_matrix =  1 - iou_matrix
+    assert dist_matrix.shape[0] == len(dets)
+    assert dist_matrix.shape[1] == len(tracks)
     return dist_matrix
