@@ -33,6 +33,32 @@ class SimpleTracklet(object):
         if uuid is not None:
             assert self.uuid == uuid
     
+    @staticmethod
+    def points_frame_transform(pre_points, pre_pose, cur_pose_inv):
+        pre_points_h = np.pad(pre_points, (0, 1), 'constant', constant_values=1)
+
+        world2curr_pose = cur_pose_inv
+
+        mm = world2curr_pose @ pre_pose
+        pre_points_in_cur = (pre_points_h @ mm.T)[:3]
+        return pre_points_in_cur
+    
+    @property
+    def centerpoints(self,):
+        return [b[:3] for b in self.box_list]
+
+    def transformed_centerpoints(self, target_inv_ego):
+        pts = self.centerpoints
+        assert len(pts) == len(self.ego_list)
+        out_pts = np.stack([self.points_frame_transform(p, ego, target_inv_ego) for p, ego in zip(pts, self.ego_list)], 0)
+        return out_pts
+
+    
+    def add_ego(self, ego_list, ts_list):
+        tmp = {t:e for t, e in zip(ts_list, ego_list)}
+        self.ego_list = [tmp[ts] for ts in self.ts_list]
+        self.inv_ego_list = [np.linalg.inv(e) for e in self.ego_list]
+    
     def freeze(self):
         self.ts2index = {ts:i for i, ts in enumerate(self.ts_list)}
     

@@ -138,3 +138,4 @@ mot_results*
 compute_tracking_metrics*
 *.bin
 figs
+work_dirs*
