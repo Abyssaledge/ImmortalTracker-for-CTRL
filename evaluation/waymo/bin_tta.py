@@ -4,6 +4,7 @@ from waymo_open_dataset.protos import metrics_pb2
 from tqdm import tqdm
 from ipdb import set_trace
 from mot_3d.tracklet import SimpleTracklet
+from mot_3d.utils import load_ego
 import numpy as np
 import os
 from os import path as osp
@@ -56,6 +57,12 @@ def match_tracklets(trks1, trks2, cfg):
     matched_pairs = []
     for i in range(len(argmin)):
         if matched_min[i].item():
+
+            if cfg.get('only_moving', False) and trks1[i].displacement < 2:
+                continue
+            if cfg.get('only_static', False) and trks1[i].displacement > 2:
+                continue
+
             pair = (i, argmin[i].item())
             matched_pairs.append(pair)
 
@@ -133,6 +140,7 @@ parser.add_argument('config', type=str)
 parser.add_argument('--bin_path_1', type=str, default='./mot_results/waymo/validation/immortal_gpu_real3d_fsdpp/bin/pred.bin')
 parser.add_argument('--bin_path_2', type=str, default='./mot_results/waymo/validation/immortal_backward_re_fsdpp/bin/pred.bin')
 parser.add_argument('--device', type=int, default=-1)
+parser.add_argument('--split', type=str, default='validation')
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -156,9 +164,21 @@ if __name__ == '__main__':
     assert set(tracklet_dict_1.keys()) == set(tracklet_dict_2.keys()), 'It is almost impossible that a sequence does not contain any tracklet'
 
     cfg = yaml.load(open(args.config, 'r'))
+    if 'test' in args.split:
+        data_folder = os.path.join('./data/waymo', 'testing')
+    else:
+        data_folder = os.path.join('./data/waymo', 'validation')
+        
     print('Start match and merge...')
     for segment_name, trks_1 in tqdm(tracklet_dict_1.items()):
         trks_2 = tracklet_dict_2[segment_name]
+
+        if cfg.get('only_moving', False) or cfg.get('only_static', False):
+            ego_list, ts_list = load_ego('segment-' + seg_name + '_with_camera_labels', data_folder)
+            for trk in trks_1 + trks_2:
+                trk.add_ego(ego_list, ts_list)
+            set_trace()
+
         pairs = match_tracklets(trks_1, trks_2, cfg=cfg)
         merged_trks = merge_tracklets(trks_1, trks_2, pairs, cfg)
         check_unique_id(merged_trks)

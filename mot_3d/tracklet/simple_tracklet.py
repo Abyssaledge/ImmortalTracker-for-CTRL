@@ -24,6 +24,7 @@ class SimpleTracklet(object):
         assert isinstance(self.type, int)
         assert int(checktype) == self.type
         self.size = len(self.box_list)
+        self.frozen = False
 
     
     def append(self, box, ts, uuid=None):
@@ -61,6 +62,22 @@ class SimpleTracklet(object):
     
     def freeze(self):
         self.ts2index = {ts:i for i, ts in enumerate(self.ts_list)}
+        self.frozen = True
+    
+    @property
+    def displacement(self,):
+        # a stupid way when there is no availble velocity
+        assert self.frozen
+        if hasattr(self, '_displacement'):
+            return self._displacement
+        else:
+            assert hasattr(self, 'ego_list')
+            ego = self.ego_list[0]
+            target_inv_ego = self.inv_ego_list[-1]
+            c1 = self.points_frame_transform(self.box_list[0][:3], ego, target_inv_ego)
+            self._displacement = np.linalg.norm(self.box_list[-1][:3] - c1, ord=2)
+            return self._displacement
+
     
     def __getitem__(self, key):
         assert isinstance(key, int)

@@ -1,9 +1,10 @@
 import numpy as np
-import os
+import os, sys
 from os import path as osp
 import argparse
 from ipdb import set_trace
 from tqdm import tqdm
+sys.path.append('.')
 
 # from pipeline_vis import frame_visualization
 from visualizer import Visualizer2D
@@ -34,7 +35,8 @@ if __name__ == '__main__':
     if args.save_folder == '':
         save_folder = osp.join('./work_dirs/vis_folder/', bin_name)
     else: 
-        save_folder = osp.join(args.save_folder, bin_name)
+        assert args.suffix != ''
+        save_folder = args.save_folder
 
     assert 'vis' in save_folder
 

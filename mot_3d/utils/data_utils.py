@@ -1,7 +1,7 @@
 # Selecting the sequences according to types
 # Transfer the ID from string into int if needed
 from ..data_protos import BBox
-import numpy as np
+import numpy as np, json
 
 
 __all__ = ['inst_filter', 'str2int', 'box_wrapper', 'type_filter', 'id_transform']
@@ -80,3 +80,11 @@ def type_filter(contents, types, type_field=[1]):
                 frame_contents.append(contents[_i][_j])
             content_result[_k].append(frame_contents)
     return content_result
+
+def load_ego(segment_name, data_folder):
+    ts_info = json.load(open(os.path.join(data_folder, 'ts_info', '{:}.json'.format(segment_name)), 'r'))
+    max_frame = len(ts_info)
+    ego_info = np.load(os.path.join(data_folder, 'ego_info', '{:}.npz'.format(segment_name)), 
+        allow_pickle=True)
+    ego_info = [ego_info[str(i)] for i in range(max_frame)]
+    return ego_info, ts_info
