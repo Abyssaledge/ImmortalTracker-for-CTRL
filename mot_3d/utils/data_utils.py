@@ -2,9 +2,10 @@
 # Transfer the ID from string into int if needed
 from ..data_protos import BBox
 import numpy as np, json
+import os
 
 
-__all__ = ['inst_filter', 'str2int', 'box_wrapper', 'type_filter', 'id_transform']
+__all__ = ['inst_filter', 'str2int', 'box_wrapper', 'type_filter', 'id_transform', 'load_ego']
 
 
 def str2int(strs):

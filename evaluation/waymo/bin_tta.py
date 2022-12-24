@@ -3,12 +3,15 @@ from waymo_open_dataset import label_pb2
 from waymo_open_dataset.protos import metrics_pb2
 from tqdm import tqdm
 from ipdb import set_trace
+import sys
+sys.path.append('.')
 from mot_3d.tracklet import SimpleTracklet
 from mot_3d.utils import load_ego
 import numpy as np
 import os
 from os import path as osp
 import argparse, yaml
+from tta_utils import naive_match, hungarian_match
 
 def read_bin(file_path):
     with open(file_path, 'rb') as f:
@@ -46,28 +49,12 @@ def generate_tracklets(bin_data):
     return tracklets_seg_dict
 
 def match_tracklets(trks1, trks2, cfg):
-    cost = np.zeros((len(trks1), len(trks2)))
-    for i in range(len(trks1)):
-        for k in range(len(trks2)):
-            dis = SimpleTracklet.tracklet_distance(trks1[i], trks2[k], cfg=cfg)
-            cost[i, k] = dis
-    argmin = cost.argmin(1)
-    min_cost = cost.min(1)
-    matched_min = min_cost < cfg['cost_thresh']
-    matched_pairs = []
-    for i in range(len(argmin)):
-        if matched_min[i].item():
-
-            if cfg.get('only_moving', False) and trks1[i].displacement < 2:
-                continue
-            if cfg.get('only_static', False) and trks1[i].displacement > 2:
-                continue
-
-            pair = (i, argmin[i].item())
-            matched_pairs.append(pair)
-
-
-    return matched_pairs
+    mode = cfg.get('match', 'naive')
+    if mode == 'naive':
+        return naive_match(trks1, trks2, cfg)
+    if mode == 'hungarian':
+        return hungarian_match(trks1, trks2, cfg)
+    raise NotImplementedError 
 
 def merge_tracklets(trks1, trks2, pairs, cfg):
 
@@ -174,10 +161,9 @@ if __name__ == '__main__':
         trks_2 = tracklet_dict_2[segment_name]
 
         if cfg.get('only_moving', False) or cfg.get('only_static', False):
-            ego_list, ts_list = load_ego('segment-' + seg_name + '_with_camera_labels', data_folder)
+            ego_list, ts_list = load_ego('segment-' + segment_name + '_with_camera_labels', data_folder)
             for trk in trks_1 + trks_2:
                 trk.add_ego(ego_list, ts_list)
-            set_trace()
 
         pairs = match_tracklets(trks_1, trks_2, cfg=cfg)
         merged_trks = merge_tracklets(trks_1, trks_2, pairs, cfg)

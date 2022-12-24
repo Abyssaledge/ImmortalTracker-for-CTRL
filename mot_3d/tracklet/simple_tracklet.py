@@ -62,6 +62,7 @@ class SimpleTracklet(object):
     
     def freeze(self):
         self.ts2index = {ts:i for i, ts in enumerate(self.ts_list)}
+        assert self.ts_list == sorted(self.ts_list)
         self.frozen = True
     
     @property
@@ -115,6 +116,30 @@ class SimpleTracklet(object):
         # union = s1.union(s2)
         return inter, s1 - s2, s2 - s1
     
+    def ts_iou(self, trk_b):
+        sa = set(self.ts_list)
+        sb = set(trk_b.ts_list)
+        inter = len(sa.intersection(sb))
+        union = len(sa.union(sb))
+        assert union > 0
+        return inter / union
+
+    def ts_iox(self, trk_b):
+        sa = set(self.ts_list)
+        sb = set(trk_b.ts_list)
+        inter = len(sa.intersection(sb))
+        assert len(sb) > 0
+        return inter / len(sb)
+
+    def ts_ios(self, trk_b): # intersection over small 
+        sa = set(self.ts_list)
+        sb = set(trk_b.ts_list)
+        inter = len(sa.intersection(sb))
+        small = min(len(sa), len(sb))
+        assert small > 0
+        return inter / small
+    
+    
     @classmethod
     def tracklet_distance(cls, trk1, trk2, cfg):
         return getattr(cls, cfg['mode'])(trk1, trk2, cfg)
@@ -161,6 +186,20 @@ class SimpleTracklet(object):
             boxes_2 = cls.boxes2mm(boxes_2)
             iou_matrix = calculate_iou_3d_gpu(boxes_1, boxes_2)
             ious = np.diagonal(iou_matrix)
+        
+        if cfg.get('timestamp_ios', False):
+            ios = trk1.ts_ios(trk2)
+            ious = ious * ios
+
+        if cfg.get('tracklet_ios', False):
+            trk_ios = (ious > cfg['box_matched_thresh']).sum() / min(len(trk1), len(trk2))
+            ious = ious * trk_ios
+
+        if cfg.get('tracklet_iou', False):
+            trk_inter = (ious > cfg['box_matched_thresh']).sum()
+            trk_iou = trk_inter / (len(trk1) + len(trk2) - trk_inter)
+            ious = ious * trk_iou
+
 
         dist = 1 - ious
         avg_dist = dist.mean()
