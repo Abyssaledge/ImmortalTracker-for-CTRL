@@ -133,14 +133,11 @@ def main(name, obj_type, config_path, data_folder, det_data_folder, result_folde
         segment_name = file_name.split('.')[0]
         data_loader = WaymoLoader(configs, [type_token], segment_name, data_folder, det_data_folder, start_frame)
 
-        try:
-            ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
-            if configs['data_loader'].get('backward', False):
-                ids.reverse()
-                bboxes.reverse()
-                states.reverse()
-        except Exception as e:
-            print(e)
+        ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
+        if configs['data_loader'].get('backward', False):
+            ids.reverse()
+            bboxes.reverse()
+            states.reverse()
 
         counter_list.append(file_index)
         print('FINISH TYPE {:} SEQ {:} / {:}'.format(obj_type, len(counter_list), len(file_names)))

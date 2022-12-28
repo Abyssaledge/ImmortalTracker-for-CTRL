@@ -4,6 +4,7 @@ from .. import life as life_manager
 from ..update_info_data import UpdateInfoData
 from ..frame_data import FrameData
 from ..data_protos import BBox
+from ipdb import set_trace
 
 
 class Tracklet:
@@ -32,22 +33,23 @@ class Tracklet:
 
             the ussage of time_stamp is optional, only if you use velocities
         """
+        # the predicted state will be appended to motion model history
         result = self.motion_model.get_prediction(time_stamp=time_stamp)
-        self.life_manager.predict(is_key_frame=is_key_frame)
-        self.latest_score = self.latest_score * 0.01
         return result
 
     def update(self, update_info: UpdateInfoData):
         """ update the state of the tracklet
         """
-        self.latest_score = update_info.bbox.s
         is_key_frame = update_info.aux_info['is_key_frame']
         
         # only the direct association update the motion model
         if update_info.mode == 1:
+            self.latest_score = update_info.bbox.s
             self.motion_model.update(update_info.bbox, update_info.aux_info)
         else:
-            pass
+            self.latest_score = update_info.bbox.s * 0.01
+
+        # self.life_manager.predict(is_key_frame=is_key_frame)
         self.life_manager.update(update_info, is_key_frame)
         return
 
