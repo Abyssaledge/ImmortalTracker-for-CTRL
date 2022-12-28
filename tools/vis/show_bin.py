@@ -18,6 +18,9 @@ parser.add_argument('--save-folder', type=str, default='./work_dirs/vis_folder')
 parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--split', type=str, default='validation')
 parser.add_argument('--no-gt', action='store_true')
+parser.add_argument('--only-moving', action='store_true')
+parser.add_argument('--only-static', action='store_true')
+parser.add_argument('--displacement', type=float, default=2.0)
 # process
 args = parser.parse_args()
 
@@ -56,6 +59,12 @@ if __name__ == '__main__':
         pt_trks = []
         for trk in trks:
             trk.add_ego(ego_list, ts_list)
+
+            if args.only_moving and trk.displacement < args.displacement:
+                continue
+            if args.only_static and trk.displacement > args.displacement:
+                continue
+
             centerpoints = trk.transformed_centerpoints(target_inv_ego)
             pt_trks.append(centerpoints)
 

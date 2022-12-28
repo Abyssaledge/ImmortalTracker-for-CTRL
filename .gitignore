@@ -136,6 +136,7 @@ waymo_bins*
 detection_data*
 mot_results*
 compute_tracking_metrics*
+compute_detection_metrics*
 *.bin
 figs
 work_dirs*

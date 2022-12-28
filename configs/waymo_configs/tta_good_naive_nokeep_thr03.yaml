@@ -1,0 +1,9 @@
+with_dimensions: True
+cost_thresh: 0.3
+max_distance: 50
+min_overlap: 2
+mode: iou3d
+box_fuse_func: weighted_box_fuse
+tracklet_iou: True
+box_matched_thresh: 0.8
+match: naive

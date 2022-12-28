@@ -11,7 +11,7 @@ import numpy as np
 import os
 from os import path as osp
 import argparse, yaml
-from tta_utils import naive_match, hungarian_match
+from tta_utils import naive_match, hungarian_match, greedy_match, bi_naive_match, mutual_naive_match
 
 def read_bin(file_path):
     with open(file_path, 'rb') as f:
@@ -54,13 +54,24 @@ def match_tracklets(trks1, trks2, cfg):
         return naive_match(trks1, trks2, cfg)
     if mode == 'hungarian':
         return hungarian_match(trks1, trks2, cfg)
+    if mode == 'greedy':
+        return greedy_match(trks1, trks2, cfg)
+    if mode == 'bi_naive':
+        return bi_naive_match(trks1, trks2, cfg)
+    if mode == 'mutual_naive':
+        return mutual_naive_match(trks1, trks2, cfg)
     raise NotImplementedError 
-
+matched_cnt = 0 
+unmatched_cnt = 0
 def merge_tracklets(trks1, trks2, pairs, cfg):
 
     out_trks = []
+    global matched_cnt
+    global unmatched_cnt
+    matched_cnt += len(pairs)
 
     if cfg.get('keep_unmatch1', False):
+        unmatched_cnt += len(trks1) - len(pairs)
         if len(pairs) == 0:
             out_trks = trks1
         else:
@@ -70,7 +81,19 @@ def merge_tracklets(trks1, trks2, pairs, cfg):
             unmatched_1 = np.where(unmatched_1)[0].tolist()
             out_trks += [trks1[i] for i in unmatched_1]
 
-    if cfg.get('keep_unmatch2', False):
+    if cfg.get('keep_unmatch1_right', False):
+        unmatched_cnt += len(trks1) - len(pairs)
+        if len(pairs) == 0:
+            out_trks = trks1
+        else:
+            indices_1 = np.array([p[0] for p in pairs], dtype=np.int)
+            unmatched_1 = np.ones(len(trks1), dtype=bool)
+            unmatched_1[indices_1] = False
+            unmatched_1 = np.where(unmatched_1)[0].tolist()
+            out_trks += [trks1[i] for i in unmatched_1]
+
+    if cfg.get('keep_unmatch2_right', False):
+        unmatched_cnt += len(trks2) - len(pairs)
 
         max_id_1 = max([t.int_id for t in trks1])
         for t2 in trks2:
@@ -80,7 +103,7 @@ def merge_tracklets(trks1, trks2, pairs, cfg):
             out_trks += trks2
         else:
             indices_2 = np.array([p[1] for p in pairs], dtype=np.int)
-            unmatched_2 = np.ones(indices_2.max().item() + 1, dtype=bool)
+            unmatched_2 = np.ones(len(trks2), dtype=bool)
             unmatched_2[indices_2] = False
             unmatched_2 = np.where(unmatched_2)[0].tolist()
             out_trks += [trks2[i] for i in unmatched_2]
@@ -155,6 +178,10 @@ if __name__ == '__main__':
         data_folder = os.path.join('./data/waymo', 'testing')
     else:
         data_folder = os.path.join('./data/waymo', 'validation')
+    
+    if cfg.get('swap', False):
+        tracklet_dict_1, tracklet_dict_2 = tracklet_dict_2, tracklet_dict_1
+        print('Swap two results.')
         
     print('Start match and merge...')
     for segment_name, trks_1 in tqdm(tracklet_dict_1.items()):
@@ -170,5 +197,6 @@ if __name__ == '__main__':
         check_unique_id(merged_trks)
         out_tracklet_dict[segment_name] = merged_trks
     
+    print(f'matched_cnt:{matched_cnt}, unmatched_cnt:{unmatched_cnt}')
     save_to_bin(out_tracklet_dict, save_path)
     call_bin(save_path)
