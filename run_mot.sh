@@ -1,4 +1,4 @@
-name=immortal_forward_test_refactor
+name=immortal_test_refactor
 det_name=fsdpp
 config=configs/waymo_configs/immortal.yaml
 obj_type=vehicle

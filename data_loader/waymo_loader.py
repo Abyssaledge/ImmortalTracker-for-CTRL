@@ -10,6 +10,7 @@ from mot_3d.preprocessing import nms
 timer = utils.Timer(10)
 from ipdb import set_trace
 import time
+import copy
 
 
 class WaymoLoader:
@@ -34,17 +35,17 @@ class WaymoLoader:
         self.det_type_filter = True
 
         self.max_frame = len(self.dets['bboxes'])
+        self.abs_frame_indices = list(range(self.max_frame))
         self.cur_frame = start_frame
 
         self.dets_bboxes = [self.dets['bboxes'][i] for i in range(self.max_frame)]
         self.dets_types = [self.dets['types'][i] for i in range(self.max_frame)]
         self.ego_info = [self.ego_info[str(i)] for i in range(self.max_frame)]
+        self.det_keys = self.dets.files
+        self.dets = None
         if configs['data_loader'].get('backward', True):
             assert 'velos' not in self.dets.keys()
-            self.dets_bboxes.reverse()
-            self.dets_types.reverse()
-            self.ego_info.reverse()
-            self.ts_info.reverse()
+            self.reverse()
     
     def __iter__(self):
         return self
@@ -54,6 +55,7 @@ class WaymoLoader:
             raise StopIteration
 
         result = dict()
+        result['time_stamp_int'] = self.ts_info[self.cur_frame]
         result['time_stamp'] = self.ts_info[self.cur_frame] * 1e-6
         if isinstance(self.ego_info, list):
             result['ego'] = self.ego_info[self.cur_frame]
@@ -73,7 +75,7 @@ class WaymoLoader:
         result['pc'] = None
         result['aux_info'] = {'is_key_frame': True}
         
-        if 'velos' in self.dets.keys():
+        if 'velos' in self.det_keys:
             cur_frame_velos = self.dets['velos'][self.cur_frame]
             result['aux_info']['velos'] = [np.array(cur_frame_velos[i]) 
                 for i in range(len(bboxes)) if inst_types[i] in self.type_token]
@@ -87,6 +89,7 @@ class WaymoLoader:
             result['dets'], result['det_types'], result['aux_info']['velos'] = \
                 self.frame_nms(result['dets'], result['det_types'], result['aux_info']['velos'], self.nms_thres)
         result['dets'] = [BBox.bbox2array(d) for d in result['dets']]
+        result['abs_frame_index'] = self.abs_frame_indices[self.cur_frame]
 
         self.cur_frame += 1
         return result
@@ -101,3 +104,32 @@ class WaymoLoader:
         if velos is not None:
             result_velos = [velos[i] for i in frame_indexes]
         return result_dets, frame_types, result_velos
+
+    def reverse(self):
+        self.dets_bboxes.reverse()
+        self.dets_types.reverse()
+        self.ego_info.reverse()
+        self.ts_info.reverse()
+        self.abs_frame_indices.reverse()
+    
+    def split(self, split_ratio):
+        loader1 = copy.deepcopy(self)
+        loader2 = copy.deepcopy(self)
+        split = int(self.max_frame * split_ratio)
+
+        loader1.dets_bboxes = loader1.dets_bboxes[:split]
+        loader1.dets_types = loader1.dets_types[:split]
+        loader1.ego_info = loader1.ego_info[:split]
+        loader1.ts_info = loader1.ts_info[:split]
+        loader1.abs_frame_indices = loader1.abs_frame_indices[:split]
+        loader1.max_frame = split
+        loader1.reverse()
+
+        loader2.dets_bboxes = loader2.dets_bboxes[split:]
+        loader2.dets_types = loader2.dets_types[split:]
+        loader2.ego_info = loader2.ego_info[split:]
+        loader2.ts_info = loader2.ts_info[split:]
+        loader2.abs_frame_indices = loader2.abs_frame_indices[split:]
+        loader2.max_frame = self.max_frame - split
+
+        return loader1, loader2

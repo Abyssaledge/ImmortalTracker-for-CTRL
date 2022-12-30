@@ -12,7 +12,7 @@ timer = Timer(10)
 
 class MOTModel:
     def __init__(self, configs):
-        self.trackers = list()         # tracker for each single tracklet
+        self.tracklets = list()         # tracker for each single tracklet
         self.frame_count = 0           # record for the frames
         self.count = 0                 # record the obj number to assign ids
         self.time_stamp = None         # the previous time stamp
@@ -44,7 +44,7 @@ class MOTModel:
 
         time_lag = input_data.time_stamp - self.time_stamp
         # update the matched tracks
-        for t, trk in enumerate(self.trackers):
+        for t, trk in enumerate(self.tracklets):
             if t not in unmatched_trks:
                 for k in range(len(matched)):
                     if matched[k][1] == t:
@@ -67,27 +67,29 @@ class MOTModel:
         for index in unmatched_dets:
             aux_info = {'is_key_frame': input_data.aux_info['is_key_frame']}
             track = tracklet.Tracklet(self.configs, self.count, input_data.dets[index], input_data.det_types[index], 
-                self.frame_count, aux_info=aux_info, time_stamp=input_data.time_stamp)
-            self.trackers.append(track)
+                self.frame_count, aux_info=aux_info, time_stamp=input_data.time_stamp, birthday=input_data.abs_frame_index)
+            self.tracklets.append(track)
             self.count += 1
         
         # remove dead tracks
-        track_num = len(self.trackers)
-        for index, trk in enumerate(reversed(self.trackers)):
+        track_num = len(self.tracklets)
+        for index, trk in enumerate(reversed(self.tracklets)):
             if trk.death(self.frame_count):
-                self.trackers.pop(track_num - 1 - index)
+                self.tracklets.pop(track_num - 1 - index)
         
         # output the results
         result = list()
-        for trk in self.trackers:
+        for trk in self.tracklets:
             state_string = trk.state_string(self.frame_count)
             single_result = {'bboxes':trk.get_state(), 'id':trk.id, 'state':state_string, 'type':trk.det_type}
+            trk.frame_results.append(single_result)
+            trk.time_stamp_history.append(input_data.abs_frame_index)
             # result.append((trk.get_state(), trk.id, state_string, trk.det_type))
             result.append(single_result)
         
         # wrap up and update the information about the mot trackers
         self.time_stamp = input_data.time_stamp
-        for trk in self.trackers:
+        for trk in self.tracklets:
             trk.sync_time_stamp(self.time_stamp)
 
         return result
@@ -99,13 +101,13 @@ class MOTModel:
 
         # prediction and association
         trk_preds = list()
-        for trk in self.trackers:
+        for trk in self.tracklets:
             trk_preds.append(trk.predict(input_data.time_stamp, input_data.aux_info['is_key_frame']))
         
         # for m-distance association
         trk_innovation_matrix = None
         if self.asso == 'm_dis':
-            trk_innovation_matrix = [trk.compute_innovation_matrix() for trk in self.trackers] 
+            trk_innovation_matrix = [trk.compute_innovation_matrix() for trk in self.tracklets] 
 
         matched, unmatched_dets, unmatched_trks = associate_dets_to_tracks(dets, trk_preds, 
             self.match_type, self.asso, self.asso_thres, trk_innovation_matrix, self.gpu)

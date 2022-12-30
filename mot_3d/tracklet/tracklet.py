@@ -8,9 +8,10 @@ from ipdb import set_trace
 
 
 class Tracklet:
-    def __init__(self, configs, id, bbox: BBox, det_type, frame_index, time_stamp=None, aux_info=None):
+    def __init__(self, configs, id, bbox: BBox, det_type, frame_index, time_stamp=None, aux_info=None, birthday=None):
         self.id = id
         self.time_stamp = time_stamp
+        self.birthday = birthday
         self.asso = configs['running']['asso']
         
         self.configs = configs
@@ -25,6 +26,33 @@ class Tracklet:
         
         # store the score for the latest bbox
         self.latest_score = bbox.s
+        self.frame_results = []
+        self.time_stamp_history = []
+        self.frozen = False
+        self.extended = False
+    
+    def freeze(self,):
+        assert not self.frozen
+        assert len(self.frame_results) == len(self.time_stamp_history)
+        self.frozen = True
+        self.ts2idx = {ts:i for i, ts in enumerate(self.time_stamp_history)}
+        assert len(self.ts2idx) == len(self.time_stamp_history)
+    
+    def get_a_frame_result(self, ts):
+        assert self.frozen
+        if ts not in self.ts2idx:
+            return None
+        return self.frame_results[self.ts2idx[ts]]
+    
+    def extend(self, trk2):
+        assert self.det_type == trk2.det_type
+        self.time_stamp_history += trk2.time_stamp_history
+        assert len(self.time_stamp_history) == len(set(self.time_stamp_history)), 'Overlapped time stamps !!'
+        self.frame_results += trk2.frame_results
+        self.extended = True
+        if self.frozen:
+            self.ts2idx = {ts:i for i, ts in enumerate(self.time_stamp_history)}
+
     
     def predict(self, time_stamp=None, is_key_frame=True):
         """ in the prediction step, the motion model predicts the state of bbox
