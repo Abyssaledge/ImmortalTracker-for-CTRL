@@ -14,19 +14,26 @@ from mot_3d.tracklet import SimpleTracklet
 
 import torch
 
-def generate_tracklets(bin_data):
+def generate_tracklets(bin_data, is_gt=False, cats=[1,]):
     tracklets = {}
     objects = bin_data.objects
     for o in tqdm(objects):
         obj_id = o.object.id
+        cat = o.object.type
+
+        if cat not in cats:
+            continue
+
+        if is_gt:
+            obj_id = str(cat) + '_' + obj_id[:3].replace('_', 'a').replace('-', 'b')
+
         ts = o.frame_timestamp_micros
         seg_name = o.context_name
         obj_uuid = seg_name + '-' + obj_id
         box = o.object.box
         box_np = np.array([box.center_x, box.center_y, box.center_z, box.width, box.length, box.height, box.heading, o.score], dtype=np.float32)
-        cat = o.object.type
         if obj_uuid not in tracklets:
-            new_tracklet = SimpleTracklet(obj_uuid, cat)
+            new_tracklet = SimpleTracklet(obj_uuid, cat, is_gt=is_gt)
             new_tracklet.append(box_np, ts)
             tracklets[obj_uuid] = new_tracklet
         else:

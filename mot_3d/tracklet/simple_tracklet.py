@@ -6,7 +6,7 @@ from waymo_open_dataset.protos import metrics_pb2
 
 class SimpleTracklet(object):
 
-    def __init__(self, uuid, type, box_list=None, ts_list=None):
+    def __init__(self, uuid, type, box_list=None, ts_list=None, is_gt=False):
 
         if box_list is None:
             self.box_list = []
@@ -19,8 +19,12 @@ class SimpleTracklet(object):
         assert '-' in uuid
         self.segment_name, self.type_and_id = uuid.split('-')
         self.type = type
-        checktype, int_id = self.type_and_id.split('_')
-        self.int_id = int(int_id)
+        try:
+            checktype, int_id = self.type_and_id.split('_')
+        except Exception:
+            set_trace()
+        if not is_gt:
+            self.int_id = int(int_id)
         assert isinstance(self.type, int)
         assert int(checktype) == self.type
         self.size = len(self.box_list)

@@ -2,7 +2,7 @@ from waymo_open_dataset import dataset_pb2
 from waymo_open_dataset import label_pb2
 from waymo_open_dataset.protos import metrics_pb2
 import os, time, numpy as np, sys, pickle as pkl
-import argparse, json
+import argparse, json, yaml
 from copy import deepcopy
 sys.path.append('.')
 from mot_3d.data_protos import BBox, Validity
@@ -15,6 +15,7 @@ parser.add_argument('--name', type=str, default='immortal')
 parser.add_argument('--det_name', type=str, default='cp')
 parser.add_argument('--obj_types', type=str, default='vehicle')#,pedestrian')#,cyclist')
 parser.add_argument('--result_folder', type=str, default='./mot_results/waymo/')
+parser.add_argument('--config_path', type=str, default='')
 parser.add_argument('--raw_data_folder', type=str, default='./data/waymo/')
 parser.add_argument('--mode', type=str, default='all')
 parser.add_argument('--src', type=str, default='summary')
@@ -24,6 +25,17 @@ parser.add_argument('--output_file_name', type=str, default='pred')
 parser.add_argument('--test', action='store_true', default=False)
 args = parser.parse_args()
 
+def call_bin(save_path):
+    import subprocess
+    print('Start evaluating bin file...')
+    ret_bytes = subprocess.check_output(
+        f'./compute_tracking_metrics_main_detail {save_path} ' + './gt.bin',
+        shell=True)
+    ret_texts = ret_bytes.decode('utf-8')
+    print(ret_texts)
+    txt_path = save_path.replace('.bin', '.txt')
+    with open(txt_path, 'w') as fw:
+        fw.write(ret_texts)
 
 def get_context_name(file_name: str):
     context = file_name.split('.')[0] # file name#
@@ -33,16 +45,16 @@ def get_context_name(file_name: str):
     return context
 
 
-def pred_content_filter(pred_contents, pred_states):
+def pred_content_filter(pred_contents, pred_states, config):
     result_contents = list()
     for contents, states in zip(pred_contents, pred_states):
-        indices = [i for i in range(len(states)) if Validity.valid(states[i])]
+        indices = [i for i in range(len(states)) if Validity.valid(states[i], config.get('max_time_since_update', 0))]
         frame_contents = [contents[i] for i in indices]
         result_contents.append(frame_contents)
     return result_contents
 
 
-def main(name, obj_type, result_folder, raw_data_folder, output_folder, output_file_name):
+def main(name, obj_type, result_folder, raw_data_folder, output_folder, output_file_name, config):
     summary_folder = os.path.join(result_folder, args.src, obj_type)
     file_names = sorted(os.listdir(summary_folder))[:]
 
@@ -73,16 +85,16 @@ def main(name, obj_type, result_folder, raw_data_folder, output_folder, output_f
 
         pred_result = np.load(os.path.join(summary_folder, file_name), allow_pickle=True)
         pred_ids, pred_bboxes, pred_states = pred_result['ids'], pred_result['bboxes'], pred_result['states'] 
-        pred_bboxes = pred_content_filter(pred_bboxes, pred_states)
-        pred_ids = pred_content_filter(pred_ids, pred_states)
+        pred_bboxes = pred_content_filter(pred_bboxes, pred_states, config)
+        pred_ids = pred_content_filter(pred_ids, pred_states, config)
         pred_velos, pred_accels = None, None
 
         if args.velo:
             pred_velos = pred_result['velos']
-            pred_velos = pred_content_filter(pred_velos, pred_states)
+            pred_velos = pred_content_filter(pred_velos, pred_states, config)
         if args.accel:
             pred_accels = pred_result['accels']
-            pred_accels = pred_content_filter(pred_accels, pred_states)
+            pred_accels = pred_content_filter(pred_accels, pred_states, config)
         obj_list += create_sequence(pred_ids, pred_bboxes, type_token, context_name, 
             ts_data, ego_motions, pred_velos, pred_accels)
         pbar.update(1)
@@ -178,6 +190,12 @@ if __name__ == '__main__':
         args.result_folder=os.path.join(args.result_folder, 'validation')
         args.raw_data_folder=os.path.join(args.raw_data_folder, 'validation')
 
+    if args.config_path != '':
+        config = yaml.load(open(args.config_path, 'r'))
+        config = config.get('merge', {})
+    else:
+        config = {}
+
     result_folder = os.path.join(args.result_folder, args.name + f'_{args.det_name}')
     output_folder = os.path.join(result_folder, 'bin')
     
@@ -186,6 +204,8 @@ if __name__ == '__main__':
 
     obj_types = args.obj_types.split(',')
     for obj_type in obj_types:
-        main(args.name, obj_type, result_folder, args.raw_data_folder, output_folder, args.output_file_name)
+        main(args.name, obj_type, result_folder, args.raw_data_folder, output_folder, args.output_file_name, config)
     
     merge_results(output_folder, obj_types, args.output_file_name)
+    bin_path = os.path.join(output_folder, '{:}.bin'.format(args.output_file_name))
+    call_bin(bin_path)

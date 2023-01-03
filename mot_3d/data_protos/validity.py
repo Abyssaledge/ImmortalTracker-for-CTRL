@@ -4,12 +4,16 @@ class Validity:
         return
     
     @classmethod
-    def valid(cls, state_string):
+    def valid(cls, state_string, max_time_since_update=0):
         tokens = state_string.split('_')
-        if not tokens[0] == 'alive':
-            return False
-        if tokens[0] == 'alive' and int(tokens[1]) == 1:
-            return True
+        from ipdb import set_trace
+        if tokens[0] == 'alive':
+            is_recent_associated, time_since_update = int(tokens[1]), int(tokens[2])
+            assert time_since_update >= 0
+            if is_recent_associated:
+                return True
+            if time_since_update <= max_time_since_update:
+                return True
         return False
 
     @classmethod

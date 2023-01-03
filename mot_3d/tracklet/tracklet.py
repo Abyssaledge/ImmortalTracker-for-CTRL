@@ -20,6 +20,7 @@ class Tracklet:
 
         self.motion_model = motion_model.KalmanFilterMotionModel(
             bbox=bbox, inst_type=self.det_type, time_stamp=time_stamp, covariance=configs['running']['covariance'])
+        self.score_multiplier = configs['running'].get('score_multiplier', 0.01)
 
         # life and death management
         self.life_manager = life_manager.HitManager(configs, frame_index)
@@ -75,7 +76,7 @@ class Tracklet:
             self.latest_score = update_info.bbox.s
             self.motion_model.update(update_info.bbox, update_info.aux_info)
         else:
-            self.latest_score = update_info.bbox.s * 0.01
+            self.latest_score = update_info.bbox.s * self.score_multiplier
 
         # self.life_manager.predict(is_key_frame=is_key_frame)
         self.life_manager.update(update_info, is_key_frame)

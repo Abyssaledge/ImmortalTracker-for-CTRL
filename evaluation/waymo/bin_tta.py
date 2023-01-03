@@ -70,51 +70,50 @@ def merge_tracklets(trks1, trks2, pairs, cfg):
     global unmatched_cnt
     matched_cnt += len(pairs)
 
-    if cfg.get('keep_unmatch1', False):
-        unmatched_cnt += len(trks1) - len(pairs)
-        if len(pairs) == 0:
-            out_trks = trks1
-        else:
-            indices_1 = np.array([p[0] for p in pairs], dtype=np.int)
-            unmatched_1 = np.ones(indices_1.max().item() + 1, dtype=bool)
-            unmatched_1[indices_1] = False
-            unmatched_1 = np.where(unmatched_1)[0].tolist()
-            out_trks += [trks1[i] for i in unmatched_1]
+    unmatched_cnt += len(trks1) - len(pairs)
+    if len(pairs) == 0:
+        unmatched_trks_1 = trks1
+    else:
+        indices_1 = np.array([p[0] for p in pairs], dtype=np.int)
+        unmatched_1 = np.ones(len(trks1), dtype=bool)
+        unmatched_1[indices_1] = False
+        unmatched_1 = np.where(unmatched_1)[0].tolist()
+        unmatched_trks_1 = [trks1[i] for i in unmatched_1]
 
     if cfg.get('keep_unmatch1_right', False):
-        unmatched_cnt += len(trks1) - len(pairs)
-        if len(pairs) == 0:
-            out_trks = trks1
-        else:
-            indices_1 = np.array([p[0] for p in pairs], dtype=np.int)
-            unmatched_1 = np.ones(len(trks1), dtype=bool)
-            unmatched_1[indices_1] = False
-            unmatched_1 = np.where(unmatched_1)[0].tolist()
-            out_trks += [trks1[i] for i in unmatched_1]
+        out_trks += unmatched_trks_1
+    
+    if cfg.get('keep1_by_length', None) is not None:
+        out_trks += [t for t in unmatched_trks_1 if len(t) > cfg['keep1_by_length']]
+
+    if cfg.get('keep1_short', None) is not None:
+        out_trks += [t for t in unmatched_trks_1 if len(t) < cfg['keep1_short']]
+
+    unmatched_cnt += len(trks2) - len(pairs)
+
+    max_id_1 = max([t.int_id for t in trks1])
+    for t2 in trks2:
+        t2.increase_id(max_id_1 + 1)
+
+    if len(pairs) == 0:
+        unmatched_trks_2 = trks2
+    else:
+        indices_2 = np.array([p[1] for p in pairs], dtype=np.int)
+        unmatched_2 = np.ones(len(trks2), dtype=bool)
+        unmatched_2[indices_2] = False
+        unmatched_2 = np.where(unmatched_2)[0].tolist()
+        unmatched_trks_2 = [trks2[i] for i in unmatched_2]
 
     if cfg.get('keep_unmatch2_right', False):
-        unmatched_cnt += len(trks2) - len(pairs)
-
-        max_id_1 = max([t.int_id for t in trks1])
-        for t2 in trks2:
-            t2.increase_id(max_id_1 + 1)
-
-        if len(pairs) == 0:
-            out_trks += trks2
-        else:
-            indices_2 = np.array([p[1] for p in pairs], dtype=np.int)
-            unmatched_2 = np.ones(len(trks2), dtype=bool)
-            unmatched_2[indices_2] = False
-            unmatched_2 = np.where(unmatched_2)[0].tolist()
-            out_trks += [trks2[i] for i in unmatched_2]
+        out_trks += unmatched_trks_2
     
 
     for pair in pairs:
         merged_trk = SimpleTracklet.merge_tracklets([trks1[pair[0]], trks2[pair[1]]], cfg)
         out_trks.append(merged_trk)
-    return out_trks
+    return out_trks, unmatched_trks_1, unmatched_trks_2
 
-def save_to_bin(tracklet_dict, save_path):
+def save_to_bin(tracklet_dict, save_path, prefix=None):
     objects = metrics_pb2.Objects()
     for seg_name, trks in tracklet_dict.items():
         for trk in trks:
@@ -122,6 +121,9 @@ def save_to_bin(tracklet_dict, save_path):
             for obj in waymo_objs:
                 objects.objects.append(obj)
 
+    if prefix is not None:
+        dir_path = osp.dirname(save_path)
+        save_path = osp.join(dir_path, prefix + '_' + osp.basename(save_path))
     f = open(save_path, 'wb')
     f.write(objects.SerializeToString())
     f.close()
@@ -136,7 +138,7 @@ def call_bin(save_path):
     import subprocess
     print('Start evaluating bin file...')
     ret_bytes = subprocess.check_output(
-        f'./compute_tracking_metrics_main_official {save_path} ' + './gt.bin',
+        f'./compute_tracking_metrics_main_detail {save_path} ' + './gt.bin',
         shell=True)
     ret_texts = ret_bytes.decode('utf-8')
     print(ret_texts)
@@ -170,6 +172,8 @@ if __name__ == '__main__':
 
 
     out_tracklet_dict = {}
+    unmatched_tracklet_dict1 = {}
+    unmatched_tracklet_dict2 = {}
 
     assert set(tracklet_dict_1.keys()) == set(tracklet_dict_2.keys()), 'It is almost impossible that a sequence does not contain any tracklet'
 
@@ -193,10 +197,24 @@ if __name__ == '__main__':
                 trk.add_ego(ego_list, ts_list)
 
         pairs = match_tracklets(trks_1, trks_2, cfg=cfg)
-        merged_trks = merge_tracklets(trks_1, trks_2, pairs, cfg)
+        merged_trks, unmatched_trks1, unmatched_trks2 = merge_tracklets(trks_1, trks_2, pairs, cfg)
         check_unique_id(merged_trks)
         out_tracklet_dict[segment_name] = merged_trks
+        unmatched_tracklet_dict1[segment_name] = unmatched_trks1
+        unmatched_tracklet_dict2[segment_name] = unmatched_trks2
     
     print(f'matched_cnt:{matched_cnt}, unmatched_cnt:{unmatched_cnt}')
+    length = 0
+    cnt = 0
+    for _, trks in unmatched_tracklet_dict1.items():
+        length += sum([len(t) for t in trks])
+        cnt += len(trks)
+    for _, trks in unmatched_tracklet_dict2.items():
+        length += sum([len(t) for t in trks])
+        cnt += len(trks)
+
+    print('mean length of unmatches: ', length / cnt)
     save_to_bin(out_tracklet_dict, save_path)
+    save_to_bin(unmatched_tracklet_dict1, save_path, prefix='unmatch1')
+    save_to_bin(unmatched_tracklet_dict2, save_path, prefix='unmatch2')
     call_bin(save_path)

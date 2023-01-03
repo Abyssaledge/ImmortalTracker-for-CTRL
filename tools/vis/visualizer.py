@@ -150,9 +150,17 @@ class BBox:
 
 
 class Visualizer2D:
-    def __init__(self, name='', figsize=(8, 8)):
+    def __init__(self, name='', figsize=(8, 8), x_range=None, y_range=None):
+
         self.figure = plt.figure(name, figsize=figsize)
-        plt.axis('equal')
+        if x_range is not None:
+            plt.xlim(x_range[0], x_range[1])
+        if y_range is not None:
+            plt.ylim(y_range[0], y_range[1])
+
+        if x_range is None and y_range is None:
+            plt.axis('equal')
+
         self.COLOR_MAP = {
             'gray': np.array([140, 140, 136]) / 256,
             'light_blue': np.array([4, 157, 217]) / 256,
@@ -190,8 +198,9 @@ class Visualizer2D:
         else:
             color=self.COLOR_MAP[color]
         plt.scatter(vis_pc[:, 0], vis_pc[:, 1], s=s, marker='o', color=color)
-        plt.text(vis_pc[0, 0] + 0.5, vis_pc[0, 1] + 0.5, str(id), color=self.COLOR_MAP['black'], fontsize=fontsize)
-        plt.text(vis_pc[-1, 0] - 0.5, vis_pc[-1, 1] - 0.5, str(id), color=self.COLOR_MAP['red'], fontsize=fontsize)
+        text = str(id)
+        plt.text(vis_pc[0, 0] + 0.5, vis_pc[0, 1] + 0.5, text, color=self.COLOR_MAP['black'], fontsize=fontsize)
+        plt.text(vis_pc[-1, 0] - 0.5, vis_pc[-1, 1] - 0.5, text, color=self.COLOR_MAP['red'], fontsize=fontsize)
     
     def handler_box(self, box: BBox, message: str='', color='red', linestyle='solid', text_color=None, fontsize='xx-small', center_message=False):
         corners = np.array(BBox.box2corners2d(box))[:, :2]

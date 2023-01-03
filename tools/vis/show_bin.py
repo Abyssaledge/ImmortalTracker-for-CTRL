@@ -14,18 +14,19 @@ parser = argparse.ArgumentParser()
 # running configurations
 parser.add_argument('--bin-path', type=str, default='./mot_results/waymo/validation/immortal_gpu_real3d_fsdpp/bin/pred.bin')
 parser.add_argument('--gt-bin-path', type=str, default='./data/waymo/waymo_format/gt.bin')
-parser.add_argument('--save-folder', type=str, default='./work_dirs/vis_folder')
+parser.add_argument('--save-folder', type=str, default='')
 parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--split', type=str, default='validation')
 parser.add_argument('--no-gt', action='store_true')
 parser.add_argument('--only-moving', action='store_true')
 parser.add_argument('--only-static', action='store_true')
+parser.add_argument('--with-gt', action='store_true')
 parser.add_argument('--displacement', type=float, default=2.0)
 # process
 args = parser.parse_args()
 
-def seq_visualization(pts_trks, name='', save_path='./exp.png', figsize=(40, 40)):
-    visualizer = Visualizer2D(name=name, figsize=figsize)
+def seq_visualization(pts_trks, name='', save_path='./exp.png', figsize=(40, 40), x_range=None, y_range=None):
+    visualizer = Visualizer2D(name=name, figsize=figsize, x_range=x_range, y_range=y_range)
     for i, p in enumerate(pts_trks):
         visualizer.handler_tracklet(p, id=i, color=i, s=0.2)
     visualizer.save(save_path)
@@ -38,7 +39,6 @@ if __name__ == '__main__':
     if args.save_folder == '':
         save_folder = osp.join('./work_dirs/vis_folder/', bin_name)
     else: 
-        assert args.suffix != ''
         save_folder = args.save_folder
 
     assert 'vis' in save_folder
@@ -47,6 +47,10 @@ if __name__ == '__main__':
 
     bin_data = read_bin(bin_path)
     track_seg_dict = generate_tracklets(bin_data)
+    if args.with_gt:
+        gt_bin_path = osp.abspath(args.gt_bin_path)
+        gt_bin_data = read_bin(gt_bin_path)
+        gt_track_seg_dict = generate_tracklets(gt_bin_data, True)
 
     if 'test' in args.split:
         data_folder = os.path.join('./data/waymo', 'testing')
@@ -68,8 +72,25 @@ if __name__ == '__main__':
             centerpoints = trk.transformed_centerpoints(target_inv_ego)
             pt_trks.append(centerpoints)
 
+        gt_pt_trks = []
+        if args.with_gt and seg_name in gt_track_seg_dict:
+            gt_trks = gt_track_seg_dict[seg_name]
+            for trk in gt_trks:
+                trk.add_ego(ego_list, ts_list)
+                centerpoints = trk.transformed_centerpoints(target_inv_ego)
+                gt_pt_trks.append(centerpoints)
+            seq_visualization(
+                gt_pt_trks,
+                save_path=osp.join(save_folder, seg_name + args.suffix + '-gt.png'),
+                figsize=(18, 18),
+                x_range=(-200, 200),
+                y_range=(-200, 200),
+            )
+
         seq_visualization(
             pt_trks,
             save_path=osp.join(save_folder, seg_name + args.suffix + '.png'),
-            figsize=(18, 18)
+            figsize=(18, 18),
+            x_range=(-200, 200),
+            y_range=(-200, 200),
         )
