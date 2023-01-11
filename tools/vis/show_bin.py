@@ -13,7 +13,7 @@ from utils import generate_tracklets, read_bin, load_ego
 parser = argparse.ArgumentParser()
 # running configurations
 parser.add_argument('--bin-path', type=str, default='./mot_results/waymo/validation/immortal_gpu_real3d_fsdpp/bin/pred.bin')
-parser.add_argument('--gt-bin-path', type=str, default='./data/waymo/waymo_format/gt.bin')
+parser.add_argument('--gt-bin-path', type=str, default='./gt.bin')
 parser.add_argument('--save-folder', type=str, default='')
 parser.add_argument('--suffix', type=str, default='')
 parser.add_argument('--split', type=str, default='validation')

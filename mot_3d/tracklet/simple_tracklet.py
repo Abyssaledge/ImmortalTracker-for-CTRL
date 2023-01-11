@@ -3,6 +3,7 @@ from ipdb import set_trace
 from waymo_open_dataset import dataset_pb2
 from waymo_open_dataset import label_pb2
 from waymo_open_dataset.protos import metrics_pb2
+from mot_3d.data_protos import BBox
 
 class SimpleTracklet(object):
 
@@ -29,6 +30,7 @@ class SimpleTracklet(object):
         assert int(checktype) == self.type
         self.size = len(self.box_list)
         self.frozen = False
+        self.in_world = False
 
     
     def append(self, box, ts, uuid=None):
@@ -67,7 +69,33 @@ class SimpleTracklet(object):
     def freeze(self):
         self.ts2index = {ts:i for i, ts in enumerate(self.ts_list)}
         assert self.ts_list == sorted(self.ts_list)
+        assert len(self.ts2index) == len(self.ts_list)
         self.frozen = True
+    
+    def to_world(self, ego_list):
+        assert not self.in_world
+        assert len(ego_list) == len(self.box_list)
+        box_w_list = []
+        for i, box in enumerate(self.box_list):
+            box_obj = BBox(box[0], box[1], box[2], box[5], box[3], box[4], box[6], box[7])
+            box_obj_w = BBox.bbox2world(ego_list[i], box_obj)
+            box_np_w = BBox.bbox2array(box_obj_w, mmorder=True)
+            box_w_list.append(box_np_w)
+        self.box_list = box_w_list
+        self.in_world = True
+    
+    def to_ego(self, ego_list):
+        assert self.in_world
+        assert len(ego_list) == len(self.box_list)
+        box_w_list = []
+        for i, box in enumerate(self.box_list):
+            box_obj = BBox(box[0], box[1], box[2], box[5], box[3], box[4], box[6], box[7])
+            box_obj_w = BBox.bbox2world(np.linalg.inv(ego_list[i]), box_obj)
+            box_np_w = BBox.bbox2array(box_obj_w, mmorder=True)
+            box_w_list.append(box_np_w)
+        self.box_list = box_w_list
+        self.in_world = False
+
     
     @property
     def displacement(self,):
@@ -263,16 +291,10 @@ class SimpleTracklet(object):
             box.center_x, box.center_y, box.center_z, box.width, box.length, box.height, box.heading, o.score = box_np.tolist()
             o.object.box.CopyFrom(box)
 
-            # meta_data = label_pb2.Label.Metadata()
-            # if args.velo:
-            #     meta_data.speed_x, meta_data.speed_y = velo[0], velo[1]
-            # if args.accel:
-            #     meta_data.accel_x, meta_data.accel_y = accel[0], accel[1]
-            # o.object.metadata.CopyFrom(meta_data)
-
             o.object.id = self.type_and_id
             o.object.type = self.type
             out_list.append(o)
+
         return out_list
     
     def increase_id(self, base):
@@ -280,4 +302,91 @@ class SimpleTracklet(object):
         self.int_id = new_id
         self.type_and_id = str(self.type) + '_' + str(new_id)
         self.uuid = self.segment_name + '-' + self.type_and_id
+    
+    def interpolate(self, cfg, full_ts_list, full_ego_list):
+
+        tmp = {t:e for t, e in zip(full_ts_list, full_ego_list)}
+        existed_ego_list = [tmp[ts] for ts in self.ts_list]
+        self.to_world(existed_ego_list)
+
+        left_ts = -1
+        right_ts = -1
+        interval_size = 1
+        recent_existed = True
+        state_change_cnt = 0
+        interval_list = []
+        for ts in full_ts_list:
+
+            if ts < self.ts_list[0]:
+                continue
+            if ts > self.ts_list[-1]:
+                break
+
+            if ts in self.ts2index:
+                if not recent_existed:
+                    right_ts = ts
+                    assert left_ts != -1
+                    interval_list.append((left_ts, right_ts, interval_size))
+                    state_change_cnt += 1
+                recent_exist_ts = ts
+                recent_existed = True
+            
+            if ts not in self.ts2index:
+                if recent_existed:
+                    left_ts = recent_exist_ts
+                    state_change_cnt += 1
+                recent_existed = False
+                interval_size += 1
+            
+        assert state_change_cnt / 2 == len(interval_list)
         
+        out_box_list = []
+        out_ts_list = []
+        interval_cnt = 0
+        recent_existed = True
+
+        for ts in full_ts_list:
+
+            if ts < self.ts_list[0]:
+                continue
+            if ts > self.ts_list[-1]:
+                break
+
+            if ts in self.ts2index:
+                out_box_list.append(self.box_list[self.ts2index[ts]])
+                out_ts_list.append(ts)
+                recent_existed = True
+            
+            if ts not in self.ts2index:
+                if recent_existed:
+                    interval_cnt += 1
+                recent_existed = False
+
+                left_ts, right_ts, size = interval_list[interval_cnt - 1]
+
+                if cfg.get('max_interval_size', -1) >= 0 and size > cfg['max_interval_size']:
+                    continue
+
+                left_box = self.box_list[self.ts2index[left_ts]]
+                right_box = self.box_list[self.ts2index[right_ts]]
+
+                left_w = (right_ts - ts) / (right_ts - left_ts)
+                right_w = (ts - left_ts) / (right_ts - left_ts)
+
+                box = left_box * left_w + right_box * right_w
+                if cfg['keep_yaw']:
+                    box[6] = left_box[6] # prevent yaw flip
+
+                box[7] *= cfg['lower_score']
+
+                out_box_list.append(box)
+                out_ts_list.append(ts)
+
+        assert interval_cnt == len(interval_list)
+        self.ts_list = out_ts_list
+        self.box_list = out_box_list
+        self.freeze()
+        
+        tmp = {t:e for t, e in zip(full_ts_list, full_ego_list)}
+        existed_ego_list = [tmp[ts] for ts in self.ts_list]
+        self.to_ego(existed_ego_list)

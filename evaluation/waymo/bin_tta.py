@@ -11,7 +11,7 @@ import numpy as np
 import os
 from os import path as osp
 import argparse, yaml
-from tta_utils import naive_match, hungarian_match, greedy_match, bi_naive_match, mutual_naive_match
+from utils import naive_match, hungarian_match, greedy_match, bi_naive_match, mutual_naive_match
 
 def read_bin(file_path):
     with open(file_path, 'rb') as f:

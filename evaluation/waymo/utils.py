@@ -2,6 +2,10 @@ from mot_3d.tracklet import SimpleTracklet
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from ipdb import set_trace
+from collections import defaultdict
+from tqdm import tqdm
+import os
+from os import path as osp
 
 def naive_match(trks1, trks2, cfg):
     cost = np.zeros((len(trks1), len(trks2)))
@@ -154,3 +158,99 @@ def mutual_naive_match(trks1, trks2, cfg):
     mutual_matched_pairs = list(set(matched_pairs).intersection(set(matched_pairs2)))
 
     return mutual_matched_pairs
+
+
+def waymo_object_to_mmdet(obj, version):
+    '''
+    According to https://github.com/waymo-research/waymo-open-dataset/blob/master/waymo_open_dataset/label.proto#L33
+    and the definition of LiDARInstance3DBoxes
+    '''
+    # if gt and obj.object.num_lidar_points_in_box == 0:
+    #     print('Encounter zero-point object')
+    #     return None
+    box = obj.object.box
+
+    assert version < '1.0.0', 'Only support version older than 1.0.0 for now'
+    heading = -box.heading - 0.5 * np.pi
+
+    while heading < -np.pi:
+        heading += 2 * np.pi
+    while heading > np.pi:
+        heading -= 2 * np.pi
+
+    result = np.array(
+        [
+            box.center_x,
+            box.center_y,
+            box.center_z,
+            box.width,
+            box.length,
+            box.height,
+            heading,
+            # obj.score,
+            # float(obj.object.type),
+        ]
+    )
+    return result
+
+def waymo_object_to_array(obj):
+    box = obj.object.box
+    result = np.array(
+        [
+            box.center_x,
+            box.center_y,
+            box.center_z,
+            box.width,
+            box.length,
+            box.height,
+            box.heading,
+            obj.score,
+            float(obj.object.type),
+        ]
+    )
+    return result
+
+def bin2lidarboxes(bin_data, debug=False, gt=False):
+    # import mmdet3d
+    # from mmdet3d.core import LiDARInstance3DBoxes
+    # mmdet3d_version = mmdet3d.__version__
+    objects = bin_data.objects
+    obj_dict = defaultdict(list)
+    ori_obj_dict = defaultdict(list)
+    id_dict = defaultdict(list)
+    segname_dict = {}
+    print('Collecting Bboxes ...')
+    for o in tqdm(objects):
+        seg_name = o.context_name
+        time_stamp = o.frame_timestamp_micros
+        obj_id = o.object.id
+        mm_obj = waymo_object_to_mmdet(o, '0.15.0')
+        if mm_obj is not None:
+            obj_dict[time_stamp].append(mm_obj)
+            ori_obj_dict[time_stamp].append(waymo_object_to_array(o))
+            id_dict[time_stamp].append(obj_id)
+            segname_dict[time_stamp] = seg_name
+
+    out_list = []
+
+    for ts in tqdm(obj_dict):
+
+        boxes = np.stack(obj_dict[ts], axis=0)[:, :7]
+        # boxes = LiDARInstance3DBoxes(np.stack(boxes, axis=0)[:, :7], box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0.5))
+        ori_boxes = np.stack(ori_obj_dict[ts])
+        ids = np.stack(id_dict[ts])
+
+        e = (ori_boxes, boxes, ids, segname_dict[ts], ts)
+        out_list.append(e)
+
+    return out_list
+
+
+def get_pc_from_time_stamp(timestamp, ts2idx, data_root, split='training'):
+
+    curr_idx = ts2idx[timestamp]
+    pc_root = osp.join(data_root, f'{split}/velodyne')
+    pc_path = os.path.join(pc_root, curr_idx + '.bin')
+    pc = np.fromfile(pc_path, dtype=np.float32).reshape(-1, 6)
+    pc = pc[:, :3]
+    return pc

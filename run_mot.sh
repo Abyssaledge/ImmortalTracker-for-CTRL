@@ -1,5 +1,5 @@
-config=configs/waymo_configs/immortal_hit0_score0_mul09.yaml
-name=immortal_hit0_score0_mul09
+config=configs/waymo_configs/immortal_hit0_score0_mul05.yaml
+name=immortal_hit0_score0_mul05
 det_name=fsdpp
 obj_type=vehicle
 process=32

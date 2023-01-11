@@ -6,7 +6,7 @@ from ipdb import set_trace
 
 
 class BBox:
-    def __init__(self, x=None, y=None, z=None, h=None, w=None, l=None, o=None):
+    def __init__(self, x=None, y=None, z=None, h=None, w=None, l=None, o=None, s=None):
         self.x = x      # center x
         self.y = y      # center y
         self.z = z      # center z
@@ -14,7 +14,7 @@ class BBox:
         self.w = w      # width
         self.l = l      # length
         self.o = o      # orientation
-        self.s = None   # detection score
+        self.s = s   # detection score
     
     def __str__(self):
         return 'x: {}, y: {}, z: {}, heading: {}, length: {}, width: {}, height: {}, score: {}'.format(
@@ -47,11 +47,17 @@ class BBox:
         return boxes
     
     @classmethod
-    def bbox2array(cls, bbox):
+    def bbox2array(cls, bbox, mmorder=False):
         if bbox.s is None:
-            return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h])
+            if mmorder:
+                return np.array([bbox.x, bbox.y, bbox.z, bbox.w, bbox.l, bbox.h, bbox.o])
+            else:
+                return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h])
         else:
-            return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h, bbox.s])
+            if mmorder:
+                return np.array([bbox.x, bbox.y, bbox.z, bbox.w, bbox.l, bbox.h, bbox.o, bbox.s])
+            else:
+                return np.array([bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h, bbox.s])
     
     def bbox2mmarray(self):
         return np.array([self.x, self.y, self.z, self.w, self.l, self.h, self.o])
