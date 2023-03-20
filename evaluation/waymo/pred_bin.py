@@ -22,7 +22,9 @@ parser.add_argument('--src', type=str, default='summary')
 parser.add_argument('--velo', action='store_true', default=False)
 parser.add_argument('--accel', action='store_true', default=False)
 parser.add_argument('--output_file_name', type=str, default='pred')
-parser.add_argument('--test', action='store_true', default=False)
+# parser.add_argument('--test', action='store_true', default=False)
+parser.add_argument('--no-eval', action='store_true', default=False)
+parser.add_argument('--split', type=str, default='validation')
 args = parser.parse_args()
 
 def call_bin(save_path):
@@ -177,18 +179,17 @@ def merge_results(output_folder, obj_types, output_file_name):
     for obj in result_objs:
         output_objs.objects.append(obj)
     
-    output_path = os.path.join(output_folder, '{:}.bin'.format(output_file_name))
+    output_path = os.path.join(output_folder, '{:}_merged.bin'.format(output_file_name))
     f = open(output_path, 'wb')
     f.write(output_objs.SerializeToString())
     f.close()
         
 if __name__ == '__main__':
-    if args.test:
-        args.result_folder=os.path.join(args.result_folder, 'testing')
-        args.raw_data_folder=os.path.join(args.raw_data_folder, 'testing')
-    else:
-        args.result_folder=os.path.join(args.result_folder, 'validation')
-        args.raw_data_folder=os.path.join(args.raw_data_folder, 'validation')
+
+    split = args.split
+    assert split in ('training', 'validation', 'testing')
+    args.result_folder=os.path.join(args.result_folder, split)
+    args.raw_data_folder=os.path.join(args.raw_data_folder, split)
 
     if args.config_path != '':
         config = yaml.load(open(args.config_path, 'r'))
@@ -207,5 +208,6 @@ if __name__ == '__main__':
         main(args.name, obj_type, result_folder, args.raw_data_folder, output_folder, args.output_file_name, config)
     
     merge_results(output_folder, obj_types, args.output_file_name)
-    bin_path = os.path.join(output_folder, '{:}.bin'.format(args.output_file_name))
-    call_bin(bin_path)
+    bin_path = os.path.join(output_folder, '{:}_merged.bin'.format(args.output_file_name))
+    if not args.no_eval:
+        call_bin(bin_path)

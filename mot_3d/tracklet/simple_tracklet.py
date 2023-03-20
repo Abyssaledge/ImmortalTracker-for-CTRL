@@ -198,7 +198,7 @@ class SimpleTracklet(object):
 
     @classmethod
     def iou3d(cls, trk1, trk2, cfg):
-        from mot_3d.utils.cuda_ops import calculate_iou_3d_gpu
+        from mot_3d.utils.cuda_ops import calculate_iou_3d_gpu, calculate_iou_3d_gpu_aligned
         overlap_ts, unq_ts1, unq_ts2 = cls.overlap_ts(trk1, trk2)
         overlap_ts = sorted(list(overlap_ts))
         unq_ts1 = sorted(list(unq_ts1))
@@ -216,8 +216,8 @@ class SimpleTracklet(object):
         else:
             boxes_1 = cls.boxes2mm(boxes_1)
             boxes_2 = cls.boxes2mm(boxes_2)
-            iou_matrix = calculate_iou_3d_gpu(boxes_1, boxes_2)
-            ious = np.diagonal(iou_matrix)
+            ious = calculate_iou_3d_gpu_aligned(boxes_1, boxes_2)
+            # ious = np.diagonal(iou_matrix)
         
         if cfg.get('timestamp_ios', False):
             ios = trk1.ts_ios(trk2)

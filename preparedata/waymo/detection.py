@@ -16,7 +16,8 @@ parser.add_argument('--file_name', type=str)
 parser.add_argument('--data_folder', type=str, default='./data/waymo/')
 parser.add_argument('--metadata', action='store_true', default=False)
 parser.add_argument('--id', action='store_true', default=False)
-parser.add_argument('--test', action='store_true', default=False)
+# parser.add_argument('--test', action='store_true', default=False)
+parser.add_argument('--split', type=str, default='validation')
 args = parser.parse_args()
 
 
@@ -191,13 +192,16 @@ def main(name, data_folder, det_folder, file_name, out_folder):
 
 
 if __name__ == '__main__':
-    if args.test:
-        args.data_folder=os.path.join(args.data_folder, 'testing')
-        args.det_folder=os.path.join(args.det_folder, 'testing/detection')
-    else:
-        args.data_folder=os.path.join(args.data_folder, 'validation')
-        args.det_folder=os.path.join(args.det_folder, 'validation/detection')
-
+    # if args.test:
+    #     args.data_folder=os.path.join(args.data_folder, 'testing')
+    #     args.det_folder=os.path.join(args.det_folder, 'testing/detection')
+    # else:
+    #     args.data_folder=os.path.join(args.data_folder, 'validation')
+    #     args.det_folder=os.path.join(args.det_folder, 'validation/detection')
+    split = args.split
+    assert split in ('training', 'validation', 'testing')
+    args.data_folder=os.path.join(args.data_folder, split)
+    args.det_folder=os.path.join(args.det_folder, f'{split}/detection')
 
     args.output_folder = os.path.join(args.det_folder, args.name, 'dets')
 

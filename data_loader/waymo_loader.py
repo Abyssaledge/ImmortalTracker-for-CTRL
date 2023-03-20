@@ -44,7 +44,7 @@ class WaymoLoader:
         self.det_keys = self.dets.files
         self.dets = None
         if configs['data_loader'].get('backward', True):
-            assert 'velos' not in self.dets.keys()
+            # assert 'velos' not in self.dets.keys()
             self.reverse()
     
     def __iter__(self):

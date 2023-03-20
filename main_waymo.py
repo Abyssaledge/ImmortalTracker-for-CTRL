@@ -19,7 +19,7 @@ parser.add_argument('--name', type=str, default='immortal')
 parser.add_argument('--det_name', type=str, default='cp')
 parser.add_argument('--process', type=int, default=1)
 parser.add_argument('--visualize', action='store_true', default=False)
-parser.add_argument('--test', action='store_true', default=False)
+# parser.add_argument('--test', action='store_true', default=False)
 parser.add_argument('--skip', action='store_true', default=False)
 parser.add_argument('--start_frame', type=int, default=0, help='start at a middle frame for debug')
 parser.add_argument('--obj_type', type=str, default='vehicle', choices=['vehicle', 'pedestrian', 'cyclist'])
@@ -156,14 +156,10 @@ def main(name, obj_type, config_path, data_folder, det_data_folder, result_folde
 
 if __name__ == '__main__':
 
-    if args.test:
-        args.data_folder = os.path.join(args.data_folder, 'testing')
-        args.det_data_folder = os.path.join(args.det_data_folder, 'testing', 'detection')
-        args.result_folder = os.path.join(args.result_folder, 'testing')
-    else:
-        args.data_folder = os.path.join(args.data_folder, 'validation')
-        args.det_data_folder = os.path.join(args.det_data_folder, 'validation', 'detection')
-        args.result_folder = os.path.join(args.result_folder, 'validation')
+    assert args.split in ('training', 'validation', 'testing')
+    args.data_folder = os.path.join(args.data_folder, args.split)
+    args.det_data_folder = os.path.join(args.det_data_folder, args.split, 'detection')
+    args.result_folder = os.path.join(args.result_folder, args.split)
 
     result_folder = os.path.join(args.result_folder, args.name + f'_{args.det_name}')
     if not os.path.exists(result_folder):
