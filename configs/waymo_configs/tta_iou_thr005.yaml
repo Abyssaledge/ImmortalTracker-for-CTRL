@@ -1,5 +1,0 @@
-with_dimensions: True
-cost_thresh: 0.05
-max_distance: 50
-min_overlap: 2
-mode: iou3d
