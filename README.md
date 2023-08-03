@@ -1,4 +1,20 @@
-# Immortal_tracker
+# Immortal_tracker for CTRL
+## This is a modified unofficial version of ImmortalTracker, tailored to easier use for CTRL. We make the follow modifications:
+
+- Calculate 3D IoU on GPU for much faster tracking, requiring MMDet3D (<v1.0).
+- Support saving the extended boxes (by motion) for the forward tracking part in CTRL.
+- Improve readability.
+- Automatically evaluation on WOD, requiring Waymo evaluation tools.
+
+These modifications is showcased in the config file: `configs/immortal_for_ctrl_keep10.yaml`. Users could compare it with official config to understand the differences.
+
+Please follow the official instruction of ImmortalTracker to prepare the data, and then user could run `run_mot.sh` to get the tracking results. Note you may need to rename some variables in `run_mot.sh` to fit your needs.
+
+Feel free to open an issue or contact me (fanlue2019@ia.ac.cn) if you have any problem.
+
+# Original README as follows
+--- 
+
 ## Prerequisite
 Our code is tested for Python 3.6.\
 To install required liabraries:
