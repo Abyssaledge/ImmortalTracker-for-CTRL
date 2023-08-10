@@ -8,7 +8,6 @@ from mot_3d.frame_data import FrameData
 from data_loader import WaymoLoader
 from ipdb import set_trace
 from mot_3d.utils import Timer
-from mot_3d.bidirection import merge_bidirection
 import time
 timer = Timer(10)
 
@@ -78,12 +77,6 @@ def frame_visualization(bboxes, ids, states, gt_bboxes=None, gt_ids=None, pc=Non
     import pdb 
     pdb.set_trace()
 
-def bidirection_sequence_mot(configs, data_loader: WaymoLoader, sequence_id, gt_bboxes=None, gt_ids=None, visualize=False):
-    loader1, loader2 = data_loader.split(configs['running']['bidirection_ratio'])
-    tracklets1 = sequence_mot(configs, loader1, sequence_id, gt_bboxes, gt_ids, visualize, return_tracklets=True)
-    tracklets2 = sequence_mot(configs, loader2, sequence_id, gt_bboxes, gt_ids, visualize, return_tracklets=True)
-    return merge_bidirection(tracklets1, tracklets2, configs)
-
 
 def sequence_mot(configs, data_loader: WaymoLoader, sequence_id, gt_bboxes=None, gt_ids=None, visualize=False, return_tracklets=False):
     tracker = MOTModel(configs)
@@ -139,14 +132,7 @@ def main(name, obj_type, config_path, data_folder, det_data_folder, result_folde
         segment_name = file_name.split('.')[0]
         data_loader = WaymoLoader(configs, [type_token], segment_name, data_folder, det_data_folder, start_frame)
 
-        if configs['running'].get('bidirection', False):
-            ids, bboxes, states, types = bidirection_sequence_mot(configs, data_loader, file_index)
-        else:
-            ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
-        if configs['data_loader'].get('backward', False):
-            ids.reverse()
-            bboxes.reverse()
-            states.reverse()
+        ids, bboxes, states, types = sequence_mot(configs, data_loader, file_index)
 
         counter_list.append(file_index)
         print('FINISH TYPE {:} SEQ {:} / {:}'.format(obj_type, len(counter_list), len(file_names)))
