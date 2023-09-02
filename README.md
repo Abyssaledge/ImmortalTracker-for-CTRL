@@ -1,5 +1,5 @@
 # Immortal_tracker for CTRL
-## This is a modified unofficial version of ImmortalTracker, tailored to easier use for CTRL. We make the follow modifications:
+## This is a modified unofficial version of [ImmortalTracker](https://github.com/ImmortalTracker/ImmortalTracker), tailored to easier use for CTRL. We make the follow modifications:
 
 - Calculate 3D IoU on GPU for much faster tracking, requiring MMDet3D (<v1.0).
 - Support saving the extended boxes (by motion) for the forward tracking part in CTRL.
